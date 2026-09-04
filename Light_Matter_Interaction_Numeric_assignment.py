@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 hbar = const.hbar 
 
 # ---------------------------------- #
-# The Dependent Schrodinger Equation #
+# Time Dependent Schrodinger Equation #
 # ---------------------------------- #
 
 # the states that does oscilations are Cg(t) and Ce(t)
@@ -14,66 +14,60 @@ hbar = const.hbar
 # ---------------------------------- #
 # Define the ODEs 
 # ---------------------------------- #
-
 def schrodinger_rabi(t, state, delta, OmegaR0):
     Cg, Ce = state
 
     # can write this as matrix?????
-    dCg_dt= 1j * hbar/2 *((-delta * Cg) + (OmegaR0 * Ce))
-    dCe_dt= 1j * hbar/2 *((delta * Ce) + (OmegaR0.conjugate() * Cg))
+    dCg_dt= -(1j/2) *((-delta * Cg) + (OmegaR0 * Ce))
+    dCe_dt= -(1j/2) *((delta * Ce) + (OmegaR0.conjugate() * Cg))
 
     return [dCg_dt, dCe_dt]
 
 # ---------------------------------- #
 # Parameters and initial states
 # ---------------------------------- #
-#OmegaR0 = [5.0, 10.0]
 OmegaR0 = [5.0]
 
-#delta = [0.0, 5.0, 10.0]
-delta = np.linspace(-5*OmegaR0[0], 5*OmegaR0[0], 2) # maybe to go over all omega R0? if not 5 dots
+initial_state = np.array([0.0, 1.0], dtype=complex)  # Initial state: Cg(0) = 0, Ce(0) = 1
 
-#OmegaR = np.sqrt(OmegaR0[0]**2 + delta[0]**2)
+t_span = (0, 10)
+t_eval = np.linspace(t_span[0], t_span[1], 3000)
 
-initial_state = [1.0 + 0.0j, 0.0 + 0.0j]  # Initial state: Cg(0) = 1, Ce(0) = 0
+# -------------------------------------------- #
+# Rabi dynamics for Delta =0 and Delta = const
+# -------------------------------------------- #
 
-t_span = (0, 100)
+delta_cases = [0.0, 5.0]
 
-# ---------------------------------- #
-# solutions 
-# ---------------------------------- #
-solutions = []
-for i in range(len(delta)):
-    for k in range(len(OmegaR0)):
-        sol_ik = solve_ivp(schrodinger_rabi, t_span, initial_state, args=(delta[i], OmegaR0[k]), dense_output=True)
-        solutions.append(sol_ik)
-        t_ik = sol_ik.t
-        Cg_t_ik = sol_ik.y[0]
-        Ce_t_ik = sol_ik.y[1]
-        norm_ik = np.sqrt(np.abs(Cg_t_ik)**2 + np.abs(Ce_t_ik)**2)
-        comp = np.all(norm_ik == norm_ik[0])
+for delta in delta_cases:
+    sol = solve_ivp(schrodinger_rabi, t_span, initial_state, args=(delta, OmegaR0[0]), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+          
+    t = sol.t
+    Cg = sol.y[0]
+    Ce = sol.y[1]
 
-        print("----------------------------")
-        print("Solution ", i, k, " with delta: ", delta[i], " OmegaR0: ", OmegaR0[k])
-        print("Cg(t): ", Cg_t_ik)
-        print("Ce(t): ", Ce_t_ik)
-        print("Normalization check (should be close to 1): ", np.average(norm_ik), ". Are all the values equal? ", comp)
-        print()
+    Pg = np.abs(Cg)**2
+    Pe = np.abs(Ce)**2
 
-        plt.figure(figsize = (10,4))
-        plt.plot(t_ik, Cg_t_ik, linewidth=0.8)
-        plt.plot(t_ik, Ce_t_ik, linewidth=0.8)
-        plt.title('Population vs. Time')
-        plt.xlabel('Time [s]')
-        plt.ylabel('Population')
-        plt.legend()
-        plt.show()
-
-# Plot???????????
-
+    norm = Pg + Pe
+    
+    print("----------------------------")
+    print(f"Delta = {delta}")
+    print("Average normalization:", np.mean(norm))
+    print("Maximum normalization error:", np.max(np.abs(norm - 1)))
+    
+    plt.figure(figsize=(10, 4))
+    plt.plot(sol.t, Pg, label=r"$|C_g|^2$")
+    plt.plot(sol.t, Pe, label=r"$|C_e|^2$")
+    plt.xlabel("Time")
+    plt.ylabel("Population")
+    plt.title(rf"Rabi oscillations, $\Delta={delta}$")
+    plt.legend()
+    plt.show()
+    
 
 # ---------------------------------- #
-# Plot
+# Scan detuning
 # ---------------------------------- #
 
 
