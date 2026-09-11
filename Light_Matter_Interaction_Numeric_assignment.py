@@ -18,7 +18,7 @@ pi = np.pi
 # ---------------------------------- #
 # Define the ODEs manually
 # ---------------------------------- #
-def schrodinger_manual(Delta0, OmegaR0, t_arr, Cg0, Ce0):
+def schrodinger_manual_2_level(Delta0, OmegaR0, t_arr, Cg0, Ce0):
 
     Cg_m = np.zeros(len(t_arr), dtype=complex)
     Ce_m = np.zeros(len(t_arr), dtype=complex)
@@ -37,7 +37,7 @@ def schrodinger_manual(Delta0, OmegaR0, t_arr, Cg0, Ce0):
 # ---------------------------------- #
 # Define the ODEs using numpy
 # ---------------------------------- #
-def schrodinger_np(t, state, Delta_func, Omega_func):
+def schrodinger_np_2_level(t, state, Delta_func, Omega_func):
     Cg, Ce = state
 
     Delta_t = Delta_func(t)
@@ -74,7 +74,7 @@ for i, delta in enumerate(delta_cases):
     Delta_func_const = lambda t, delta=delta: delta
 
     # numpy ODE solution 
-    sol = solve_ivp(schrodinger_np, t_span, initial_state, args=(Delta_func_const, Omega_func_const), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+    sol = solve_ivp(schrodinger_np_2_level, t_span, initial_state, args=(Delta_func_const, Omega_func_const), t_eval=t_eval, rtol=1e-9, atol=1e-11)
           
     Cg_np = sol.y[0]
     Ce_np = sol.y[1]
@@ -83,23 +83,27 @@ for i, delta in enumerate(delta_cases):
     Pe_np = np.abs(Ce_np)**2
 
     norm_np = Pg_np + Pe_np
+    avg_norm_np = np.mean(norm_np)
+    error_np = np.max(np.abs(norm_np - 1))
 
     # manual solution 
-    Cg_m, Ce_m = schrodinger_manual(delta, OmegaR0, t_eval, initial_state[0], initial_state[1]) # initial_state[0] : Cg(0) = 0, initial_state[1] : Ce(0) = 1
+    Cg_m, Ce_m = schrodinger_manual_2_level(delta, OmegaR0, t_eval, initial_state[0], initial_state[1]) # initial_state[0] : Cg(0) = 0, initial_state[1] : Ce(0) = 1
 
     Pg_m = np.abs(Cg_m)**2
     Pe_m = np.abs(Ce_m)**2
     
     norm_m  = Pg_m + Pe_m
+    avg_norm_m = np.mean(norm_m)
+    error_m = np.max(np.abs(norm_m - 1))
 
-    # norm check, and err evaluation
-    print("----------------------------")
-    print(f"Delta = {delta}")
-    print("Average normalization:")
-    print("by numpy: ", np.mean(norm_np), " manually: ", np.mean(norm_m))
-    print("Maximum normalization error:")
-    print("by numpy: ", np.max(np.abs(norm_np - 1)), " manually: ", np.max(np.abs(norm_m - 1)))
-    print("----------------------------")
+    # # norm check, and err evaluation
+    # print("----------------------------")
+    # print(f"Delta = {delta}")
+    # print("Average normalization:")
+    # print("by numpy: ", np.mean(norm_np), " manually: ", np.mean(norm_m))
+    # print("Maximum normalization error:")
+    # print("by numpy: ", np.max(np.abs(norm_np - 1)), " manually: ", np.max(np.abs(norm_m - 1)))
+    # print("----------------------------")
 
     # plot graphs
     Cg_color, Ce_color = colors[i]
@@ -112,6 +116,11 @@ for i, delta in enumerate(delta_cases):
     axes[0, i].set_ylabel("Population")
     axes[0, i].legend(loc="upper left")
 
+    norm_text_np = (rf"$\langle P_g+P_e\rangle={avg_norm_np:.10f}$"
+    "\n"
+    rf"$\max|P_g+P_e-1|={error_np:.2e}$")
+
+    axes[0, i].text(0.5, -0.30, norm_text_np, transform=axes[0, i].transAxes, ha="center", va="top", fontsize=10)
     # manual plot - row 1
     axes[1, i].plot(t_eval, Pg_m, label=r"$|C_g|^2$", color=Cg_color)
     axes[1, i].plot(t_eval, Pe_m, label=r"$|C_e|^2$", color=Ce_color)
@@ -121,11 +130,19 @@ for i, delta in enumerate(delta_cases):
     axes[1, i].set_ylabel("Population")
     axes[1, i].legend(loc="upper left")
 
+    norm_text_m = (rf"$\langle P_g+P_e\rangle={avg_norm_m:.10f}$"
+    "\n"
+    rf"$\max|P_g+P_e-1|={error_m:.2e}$")
+    axes[1, i].text(0.5, -0.30, norm_text_m, transform=axes[1, i].transAxes, ha="center", va="top", fontsize=10)
+
 # Row titles
 fig.text(0.5, 0.88, "solve_ivp solution",ha="center",fontsize=15)
 fig.text(0.5, 0.45, "Manual solution",ha="center", fontsize=15)
 # main title
-fig.suptitle(rf"Rabi oscillations, $\Omega_R={OmegaR0}$",fontsize=18,y=0.98)
+fig.suptitle(rf"Rabi oscillations, $\Omega_R={OmegaR0}$"
+            "\n"
+            rf"C(0) = ({np.real(initial_state[0])}, {np.real(initial_state[1])})"
+             ,fontsize=16,y=0.97)
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 
 filename = f"Rabi_Omega_{OmegaR0}.png"
@@ -139,7 +156,7 @@ plt.show()
     
 
 # ---------------------------------- #
-# Scan detuning
+# Scan detuning Pe Matrix
 # ---------------------------------- #
 
 delta_values = np.linspace(-5 * OmegaR0, 5 * OmegaR0, 1000)
@@ -150,7 +167,7 @@ for i, delta in enumerate(delta_values):
 
     Delta_func_const = lambda t, delta=delta: delta
 
-    sol = solve_ivp(schrodinger_np, t_span, initial_state, args=(Delta_func_const, Omega_func_const), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+    sol = solve_ivp(schrodinger_np_2_level, t_span, initial_state, args=(Delta_func_const, Omega_func_const), t_eval=t_eval, rtol=1e-9, atol=1e-11)
 
     Ce = sol.y[1]
     Pe = np.abs(Ce)**2
@@ -176,7 +193,6 @@ plt.show()
 # ---------------------------------- #
 # x-axis cross sections
 # ---------------------------------- #
-
 selected_deltas = [-5 * OmegaR0, -2 * OmegaR0, 0, 2 * OmegaR0, 5 * OmegaR0]
 
 fig, axes = plt.subplots(2, 3, figsize=(15, 8))
@@ -204,10 +220,7 @@ plt.show()
 # ---------------------------------- #
 # y-axis cross sections
 # ---------------------------------- #
-
 selected_times = np.linspace(t_span[0], t_span[1], 5)
-
-plt.figure(figsize=(10,5))
 
 fig, axes = plt.subplots(2, 3, figsize=(15, 8))
 
@@ -266,7 +279,7 @@ ax.plot([0, 0], [0, 0], [-1, 1], color='black')
 for delta in selected_deltas_bloch:
 
     Delta_func_const = lambda t, delta=delta: delta
-    sol = solve_ivp(schrodinger_np, t_span, initial_state, args=(Delta_func_const, Omega_func_const), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+    sol = solve_ivp(schrodinger_np_2_level, t_span, initial_state, args=(Delta_func_const, Omega_func_const), t_eval=t_eval, rtol=1e-9, atol=1e-11)
 
     Cg = sol.y[0]
     Ce = sol.y[1]
@@ -318,9 +331,9 @@ plt.show()
 # ------------------------------------- #
 # Rosen Zender
 # ------------------------------------- #
-Omega0 = 5.0
+Omega0 = 3.0
 T = 1.0
-Delta_RZ_cases = [0.0, 5.0, 15.0]
+Delta_RZ_cases = [0.0, 3.0, 9.0]
 
 def sech(x):
     return 1 / np.cosh(x)
@@ -339,7 +352,7 @@ for i, delta in enumerate(Delta_RZ_cases):
     # Delta(t) = Delta0 = const
     DeltaRZ_func = lambda t, delta=delta: delta
 
-    sol = solve_ivp(schrodinger_np, t_spanRZ, initial_state, args=(DeltaRZ_func, OmegaRZ_func), t_eval=t_evalRZ, rtol=1e-9, atol=1e-11)
+    sol = solve_ivp(schrodinger_np_2_level, t_spanRZ, initial_state, args=(DeltaRZ_func, OmegaRZ_func), t_eval=t_evalRZ, rtol=1e-9, atol=1e-11)
 
     Cg = sol.y[0]
     Ce = sol.y[1]
@@ -494,69 +507,278 @@ plt.show()
 # ------------------------------------- #
 
 Omega0 = 10.0
-Delta0 = 1.0
+Delta_CH_cases = [0.0, 1.0, 10.0]
 T = 1
 B = 1
 
 OmegaCH_func = lambda t : Omega0 * np.exp(-np.abs(t / T))
-DeltaCH_func = lambda t : Delta0 + B * np.exp(-2 * np.abs(t / T))
 
 # Time range
 t_spanCH = (-5*T, 5*T)
 t_evalCH = np.linspace(-5*T, 5*T, 1000)
 
-sol = solve_ivp(schrodinger_np, t_spanCH, initial_state, args=(DeltaCH_func, OmegaCH_func), t_eval=t_evalCH, rtol=1e-9, atol=1e-11)
+fig = plt.figure(figsize=(18,6))
 
-Cg = sol.y[0]
-Ce = sol.y[1]
+for i, delta in enumerate(Delta_CH_cases):
+    DeltaCH_func = lambda t, delta=delta : (delta + B * np.exp(-2 * np.abs(t / T)))
 
-U = (Cg.conjugate() * Ce) + (Cg * Ce.conjugate())
-V = 1j * ((Cg.conjugate() * Ce) - (Cg * Ce.conjugate()))
-W = np.abs(Ce)**2 - np.abs(Cg)**2
+    sol = solve_ivp(schrodinger_np_2_level, t_spanCH, initial_state, args=(DeltaCH_func, OmegaCH_func), t_eval=t_evalCH, rtol=1e-9, atol=1e-11)
 
-# U,V should theoretically be real
-U = np.real(U)
-V = np.real(V)
-W = np.real(W)
+    Cg = sol.y[0]
+    Ce = sol.y[1]
 
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
+    U = (Cg.conjugate() * Ce) + (Cg * Ce.conjugate())
+    V = 1j * ((Cg.conjugate() * Ce) - (Cg * Ce.conjugate()))
+    W = np.abs(Ce)**2 - np.abs(Cg)**2
 
-ax.plot_wireframe(x, y, z, alpha=0.1)
+    # U,V should theoretically be real
+    U = np.real(U)
+    V = np.real(V)
+    W = np.real(W)
 
-# coordinate axes
-ax.plot([-1, 1], [0, 0], [0, 0], color='black')
-ax.plot([0, 0], [-1, 1], [0, 0], color='black')
-ax.plot([0, 0], [0, 0], [-1, 1], color='black')
+    ax = fig.add_subplot(1, 3, i + 1, projection='3d')
 
+    ax.plot_wireframe(x, y, z, alpha=0.1)
 
-ax.plot(U, V, W, label=rf"$\Delta(t)= \Delta_0 + B exp(-2|t/T|), \Omega(t) = \Omega_0exp(-|t/T|)$")
+    # coordinate axes
+    ax.plot([-1, 1], [0, 0], [0, 0], color='black')
+    ax.plot([0, 0], [-1, 1], [0, 0], color='black')
+    ax.plot([0, 0], [0, 0], [-1, 1], color='black')
 
-ax.set_xlim([-1, 1])
-ax.set_ylim([-1, 1])
-ax.set_zlim([-1, 1])
+    ax.plot(U, V, W, label=(rf"$\Delta_0={delta}$"))
 
-ax.set_xticklabels([])
-ax.set_yticklabels([])
-ax.set_zticklabels([])
+    ax.set_xlim([-1, 1])
+    ax.set_ylim([-1, 1])
+    ax.set_zlim([-1, 1])
 
-ax.set_box_aspect([1, 1, 1])
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_zticklabels([])
 
-ax.set_title("Trajectories on the Optical Bloch Sphere Allen Eberly Solution")
-ax.legend()
+    ax.set_box_aspect([1, 1, 1])
 
-# Custom axes
-ax.quiver(1.0-1.2, 0, 0, 1.2, 0, 0, arrow_length_ratio=0.08, color='black')
-ax.quiver(0, 1.0-1.2, 0, 0, 1.2, 0, arrow_length_ratio=0.08, color='black')
-ax.quiver(0, 0, 1.0-1.2, 0, 0, 1.2, arrow_length_ratio=0.08, color='black')
+    ax.legend(loc="upper left")
 
-# Labels
-ax.text(1.0 + 0.05, 0, 0, 'U', fontsize=12)
-ax.text(0, 1.0 + 0.05, 0, 'V', fontsize=12)
-ax.text(0, 0, 1.0 + 0.05, 'W', fontsize=12)
+    # Custom axes
+    ax.quiver(1.0-1.2, 0, 0, 1.2, 0, 0, arrow_length_ratio=0.08, color='black')
+    ax.quiver(0, 1.0-1.2, 0, 0, 1.2, 0, arrow_length_ratio=0.08, color='black')
+    ax.quiver(0, 0, 1.0-1.2, 0, 0, 1.2, arrow_length_ratio=0.08, color='black')
 
+    # Labels
+    ax.text(1.0 + 0.05, 0, 0, 'U', fontsize=12)
+    ax.text(0, 1.0 + 0.05, 0, 'V', fontsize=12)
+    ax.text(0, 0, 1.0 + 0.05, 'W', fontsize=12)
+
+fig.suptitle(
+    r"Carroll-Hioe trajectories on the Optical Bloch Sphere"
+    "\n"
+    r"$\Omega(t)=\Omega_0 e^{-|t/T|}$, "
+    r"$\Delta(t)=\Delta_0 + B e^{-2|t/T|}$", fontsize=18, y=0.96)
+
+fig.text(0.5, 0.02,
+    rf"$\Omega_0={Omega0}$, $T={T:.2f}$, $B={B}$, "
+    r"Initial state: $|C_g|^2=0,\ |C_e|^2=1$", ha="center", fontsize=13)
+
+plt.tight_layout(rect=[0, 0.06, 1, 0.92])
 plt.savefig("Carroll Hioe Solution.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 
 
+# ------------------------------------- #
+# 1.d. Bonus find the requirements for full population transfer
+# if i have time, for RZ there's analytic solution, but for CH numeric calculation needed
+# ------------------------------------- #
+
+
+
+# ---------------------------------- #
+# Part 2 - Three level system  
+# ---------------------------------- #
+
+# ---------------------------------- #
+# 2.a. Define the ODEs using numpy
+# ---------------------------------- #
+
+# accourding to the hemiltonian 2.a.
+def schrodinger_3_level(t, state, Delta_func, delta_func, Omega12_func, Omega23_func):
+    C1, C2, C3 = state
+
+    Delta_t = Delta_func(t)
+    delta_t = delta_func(t)
+    Omega12_t = Omega12_func(t)
+    Omega23_t = Omega23_func(t)
+
+    dC1_dt= -(1j/2) *(Omega12_t * C2)
+    dC2_dt= -(1j/2) *((Omega12_t.conjugate() * C1) + (Delta_t * C2)+(Omega23_t * C3))
+    dC3_dt= -(1j/2) *((Omega23_t.conjugate()* C2) + (delta_t * C3))
+
+    return [dC1_dt, dC2_dt, dC3_dt]
+
+# ---------------------------------- #
+# 2.b.- 2.c. Rabi-like solution
+# ---------------------------------- #
+Omega12_cases = Omega23_cases = [5.0, 5.0, 5.0, 5.0]
+Delta0_cases = [0.0, 0.0, 2 * Omega12_cases[1], 2 * Omega12_cases[1]]
+delta0_cases = [0.0, 0.0, 4 * Omega12_cases[1], 4 * Omega12_cases[1]]
+
+# define initaial state cases:
+initial_state_cases = np.array([(1, 0, 0), (0, 1, 0), (1, 0, 0), (0, 1, 0)], dtype=complex)
+
+# Time 
+t_span = (0, (6*pi/Omega12_cases[0]))
+t_eval = np.linspace(t_span[0], t_span[1], 3000)
+
+# Plot def
+fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+axes = axes.flatten()
+
+colors = ["navy", "darkorange", "purple"]
+# colors = [("navy", "darkorange"), ("purple", "pink")] 
+
+for i in range(len(Omega12_cases)):
+    Omega12_0 = Omega12_cases[i]
+    Omega23_0 = Omega23_cases[i]
+    Delta0 = Delta0_cases[i]
+    delta0 = delta0_cases[i]
+
+     # Delta(t), delta(t), Omega12(t), Omega23(t) are all const
+    Omega12 = lambda t, Omega12_0=Omega12_0: Omega12_0
+    Omega23 = lambda t, Omega23_0=Omega23_0: Omega23_0
+    Delta = lambda t, Delta0=Delta0: Delta0
+    delta = lambda t, delta0=delta0: delta0
+
+    sol = solve_ivp(schrodinger_3_level, t_span, initial_state_cases[i], args=(Delta, delta, Omega12, Omega23), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+
+    C1, C2, C3 = sol.y[0], sol.y[1], sol.y[2]
+    P1, P2, P3 = np.abs(C1)**2, np.abs(C2)**2, np.abs(C3)**2
+    norm = P1 + P2 + P3
+    avg_norm = np.mean(norm)
+    error = np.max(np.abs(norm - 1))
+
+   # ---------------------------------- #
+    # Plot
+    # ---------------------------------- #
+    ax = axes[i]
+
+    ax.plot(t_eval, P1, label=r"$|C_1|^2$", color=colors[0])
+    ax.plot(t_eval, P2, label=r"$|C_2|^2$", color=colors[1])
+    ax.plot(t_eval, P3, label=r"$|C_3|^2$", color=colors[2])
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Population")
+
+    ax.set_ylim(-0.05, 1.05)
+
+    ax.legend(loc="upper right")
+    ax.grid(alpha=0.3)
+
+    # initial state for title
+    c10, c20, c30 = np.real(initial_state_cases[i])
+
+    ax.set_title(rf"$\Omega_{{12}}=\Omega_{{23}}={Omega12_0}$"
+        "\n"
+        rf"$\Delta={Delta0},\ \delta={delta0}$"
+        "\n"
+        rf"$C(0)=({c10},{c20},{c30})$")
+
+    norm_text = (rf"$\langle P_1+P_2+P_3\rangle={avg_norm:.10f}$"
+        "\n"
+        rf"$\max|P_1+P_2+P_3-1|={error:.2e}$")
+
+    ax.text(0.5, -0.30, norm_text, transform=ax.transAxes, ha="center", va="top", fontsize=10)
+
+fig.suptitle(r"Three-level system dynamics"
+             "\n"
+             "Rabi like solution", fontsize=18, y=0.99)
+
+plt.tight_layout(rect=[0, 0.06, 1, 0.95])
+plt.savefig("Three_level_Rabi_like.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+
+
+# ----------------------------------- #
+# 2.d. Adiabatic Elimination solution
+# ----------------------------------- #
+
+Omega12_cases = [5.0, 5.0, 5.0, 5.0]
+Omega23_cases = [5.0, 5.0, 5.0, 5.0]
+Delta0_cases = [10 * Omega12_cases[1], 10 * Omega12_cases[1], 20 * Omega12_cases[1], 20 * Omega12_cases[1]]
+delta0_cases = [0.0, 0.0, 0.0, 0.0]
+
+
+# Plot def
+fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+axes = axes.flatten()
+
+for i in range(len(Omega12_cases)):
+    Omega12_0 = Omega12_cases[i]
+    Omega23_0 = Omega23_cases[i]
+    Delta0 = Delta0_cases[i]
+    delta0 = delta0_cases[i]
+
+    Omega_eff = Omega12_0 * Omega23_0 / Delta0
+    # Time 
+    t_span = (0, (3*pi/Omega_eff))
+    t_eval = np.linspace(t_span[0], t_span[1], 3000)    
+
+     # Delta(t), delta(t), Omega12(t), Omega23(t) are all const
+    Omega12 = lambda t, Omega12_0=Omega12_0: Omega12_0
+    Omega23 = lambda t, Omega23_0=Omega23_0: Omega23_0
+    Delta = lambda t, Delta0=Delta0: Delta0
+    delta = lambda t, delta0=delta0: delta0
+
+    sol = solve_ivp(schrodinger_3_level, t_span, initial_state_cases[i], args=(Delta, delta, Omega12, Omega23), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+
+    C1, C2, C3 = sol.y[0], sol.y[1], sol.y[2]
+    P1, P2, P3 = np.abs(C1)**2, np.abs(C2)**2, np.abs(C3)**2
+    norm = P1 + P2 + P3
+    avg_norm = np.mean(norm)
+    error = np.max(np.abs(norm - 1))
+
+    # ---------------------------------- #
+    # Plot
+    # ---------------------------------- #
+    ax = axes[i]
+
+    ax.plot(t_eval, P1, label=r"$|C_1|^2$", color=colors[0])
+    ax.plot(t_eval, P2, label=r"$|C_2|^2$", color=colors[1])
+    ax.plot(t_eval, P3, label=r"$|C_3|^2$", color=colors[2])
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Population")
+
+    ax.set_ylim(-0.05, 1.05)
+
+    ax.legend(loc="upper right")
+    ax.grid(alpha=0.3)
+
+    # initial state for title
+    c10, c20, c30 = np.real(initial_state_cases[i])
+
+    ax.set_title(rf"$\Omega_{{12}}=\Omega_{{23}}={Omega12_0}$"
+        "\n"
+        rf"$\Delta={Delta0},\ \delta={delta0}$"
+        "\n"
+        rf"$C(0)=({c10},{c20},{c30})$")
+
+    norm_text = (rf"$\langle P_1+P_2+P_3\rangle={avg_norm:.10f}$"
+        "\n"
+        rf"$\max|P_1+P_2+P_3-1|={error:.2e}$")
+
+    ax.text(0.5, -0.30, norm_text, transform=ax.transAxes, ha="center", va="top", fontsize=10)
+
+fig.suptitle(r"Three-level system dynamics"
+             "\n"
+             "Adiabatic Elimination solution full H", fontsize=18, y=0.99)
+
+plt.tight_layout(rect=[0, 0.06, 1, 0.95])
+plt.savefig("Three_level_AE.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+# ---------------------------------- #
+# 2.e. solving via Heff
+# ---------------------------------- #
+
+Omega_eff = Omega12_0 * Omega23_0 / Delta0
