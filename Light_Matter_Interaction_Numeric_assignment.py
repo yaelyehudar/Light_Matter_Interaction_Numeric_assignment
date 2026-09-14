@@ -96,14 +96,6 @@ for i, delta in enumerate(delta_cases):
     avg_norm_m = np.mean(norm_m)
     error_m = np.max(np.abs(norm_m - 1))
 
-    # # norm check, and err evaluation
-    # print("----------------------------")
-    # print(f"Delta = {delta}")
-    # print("Average normalization:")
-    # print("by numpy: ", np.mean(norm_np), " manually: ", np.mean(norm_m))
-    # print("Maximum normalization error:")
-    # print("by numpy: ", np.max(np.abs(norm_np - 1)), " manually: ", np.max(np.abs(norm_m - 1)))
-    # print("----------------------------")
 
     # plot graphs
     Cg_color, Ce_color = colors[i]
@@ -207,6 +199,7 @@ for ax, delta_target in zip(axes, selected_deltas):
     ax.set_title(rf"$\Delta={delta_values[index]:.1f}$")
     ax.set_xlabel("Time")
     ax.set_ylabel(r"$P_e$")
+    ax.set_ylim(0, 1)
 
 # if subplot empty
 for ax in axes[len(selected_deltas):]:
@@ -234,6 +227,7 @@ for ax, t_target in zip(axes, selected_times):
     ax.set_title(rf"$t={t_eval[index]:.1f}$")
     ax.set_xlabel(r"Detuning $\Delta$")
     ax.set_ylabel(r"$|C_e|^2$")
+    ax.set_ylim(0, 1)
 
 # if subplot empty
 for ax in axes[len(selected_deltas):]:
@@ -706,6 +700,7 @@ Omega23_cases = [5.0, 5.0, 5.0, 5.0]
 Delta0_cases = [10 * Omega12_cases[1], 10 * Omega12_cases[1], 20 * Omega12_cases[1], 20 * Omega12_cases[1]]
 delta0_cases = [0.0, 0.0, 0.0, 0.0]
 
+Omega_eff1 = (Omega12_cases[-1] * Omega23_cases[-1]) / Delta0_cases[-1]
 
 # Plot def
 fig, axes = plt.subplots(2, 2, figsize=(13, 9))
@@ -719,7 +714,7 @@ for i in range(len(Omega12_cases)):
 
     Omega_eff = Omega12_0 * Omega23_0 / Delta0
     # Time 
-    t_span = (0, (3*pi/Omega_eff))
+    t_span = (0, (3*pi/Omega_eff1))
     t_eval = np.linspace(t_span[0], t_span[1], 3000)    
 
      # Delta(t), delta(t), Omega12(t), Omega23(t) are all const
@@ -862,7 +857,177 @@ plt.tight_layout(rect=[0, 0.06, 1, 0.95])
 plt.savefig("Three_level_AE_Heff.png", dpi=300, bbox_inches="tight")
 plt.show()
 
+# -------------------------------------------------- #
+# Compare full 3-level H with effective H_eff
+# Adiabatic Elimination
+# -------------------------------------------------- #
 
+Omega12_0 = 5.0
+Omega23_0 = 5.0
+
+Delta_cases = [10 * Omega12_0, 20 * Omega12_0]   # 50, 100
+delta0 = 0.0
+
+# Initial states
+initial_state_full = np.array([1.0, 0.0, 0.0], dtype=complex)
+initial_state_eff  = np.array([1.0, 0.0], dtype=complex)
+
+# Colors
+full_colors = {
+    "P1": "purple",
+    "P2": "navy",
+    "P3": "darkorange"
+}
+
+eff_colors = {
+    "P1": "mediumorchid",
+    "P3": "orange"
+}
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+axes = axes.flatten()
+
+for i, Delta0 in enumerate(Delta_cases):
+
+    # ---------------------------------- #
+    # Effective parameters
+    # ---------------------------------- #
+    Omega_eff = (Omega12_0 * Omega23_0) / Delta0
+    Delta_eff = (Omega12_0**2) / Delta0
+
+    # Same time axis for both solutions
+    t_span = (0, 3 * np.pi / Omega_eff)
+    t_eval = np.linspace(t_span[0], t_span[1], 3000)
+
+    # ---------------------------------- #
+    # Full 3-level Hamiltonian
+    # ---------------------------------- #
+    Omega12 = lambda t, Omega12_0=Omega12_0: Omega12_0
+    Omega23 = lambda t, Omega23_0=Omega23_0: Omega23_0
+    Delta = lambda t, Delta0=Delta0: Delta0
+    delta = lambda t, delta0=delta0: delta0
+
+    sol_full = solve_ivp(
+        schrodinger_3_level,
+        t_span,
+        initial_state_full,
+        args=(Delta, delta, Omega12, Omega23),
+        t_eval=t_eval,
+        rtol=1e-9,
+        atol=1e-11
+    )
+
+    C1_full = sol_full.y[0]
+    C2_full = sol_full.y[1]
+    C3_full = sol_full.y[2]
+
+    P1_full = np.abs(C1_full)**2
+    P2_full = np.abs(C2_full)**2
+    P3_full = np.abs(C3_full)**2
+
+    # ---------------------------------- #
+    # Effective 2-level Hamiltonian
+    # ---------------------------------- #
+    sol_eff = solve_ivp(
+        schrodinger_Heff,
+        t_span,
+        initial_state_eff,
+        args=(Delta_eff, Omega_eff),
+        t_eval=t_eval,
+        rtol=1e-9,
+        atol=1e-11
+    )
+
+    C1_eff = sol_eff.y[0]
+    C3_eff = sol_eff.y[1]
+
+    P1_eff = np.abs(C1_eff)**2
+    P3_eff = np.abs(C3_eff)**2
+
+    # ---------------------------------- #
+    # Plot comparison
+    # ---------------------------------- #
+    ax = axes[i]
+
+    # Full H - solid lines
+    ax.plot(
+        t_eval,
+        P1_full,
+        color=full_colors["P1"],
+        linewidth=2.2,
+        label=r"$P_1$ full $H$"
+    )
+
+    ax.plot(
+        t_eval,
+        P2_full,
+        color=full_colors["P2"],
+        linewidth=1.4,
+        alpha=0.8,
+        label=r"$P_2$ full $H$"
+    )
+
+    ax.plot(
+        t_eval,
+        P3_full,
+        color=full_colors["P3"],
+        linewidth=2.2,
+        label=r"$P_3$ full $H$"
+    )
+
+    # H_eff - dashed lines with lighter shades
+    ax.plot(
+        t_eval,
+        P1_eff,
+        linestyle=(0, (5, 3)),
+        color=eff_colors["P1"],
+        linewidth=2.4,
+        label=r"$P_1$ $H_{\rm eff}$"
+    )
+
+    ax.plot(
+        t_eval,
+        P3_eff,
+        linestyle=(0, (5, 3)),
+        color=eff_colors["P3"],
+        linewidth=2.4,
+        label=r"$P_3$ $H_{\rm eff}$"
+    )
+
+    # Axes
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Population")
+    ax.set_ylim(-0.05, 1.05)
+
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=9, loc="upper right")
+
+    # Title
+    ax.set_title(
+        rf"$\Omega_{{12}}=\Omega_{{23}}={Omega12_0}$"
+        "\n"
+        rf"$\Delta={Delta0},\ \delta=0$"
+        "\n"
+        rf"$\Omega_{{eff}}={Omega_eff:.3f}$"
+    )
+
+fig.suptitle(
+    r"Adiabatic Elimination: full $H$ vs. $H_{\rm eff}$"
+    "\n"
+    r"$C(0)=(1,0,0)$",
+    fontsize=17,
+    y=0.98
+)
+
+plt.tight_layout(rect=[0, 0, 1, 0.90])
+
+plt.savefig(
+    "AE_full_H_vs_Heff.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.show()
 
 # ------------------------------------------------------------- #
 # 2.f. - 2.g. 3 level EIT (Electromagnetic Induced Tansparency)
