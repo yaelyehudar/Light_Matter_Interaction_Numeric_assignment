@@ -213,7 +213,7 @@ for ax in axes[len(selected_deltas):]:
     ax.axis("off")
 
 plt.tight_layout(rect=[0, 0, 1, 0.95])
-fig.text(0.5, 0.96, r"Pe x cross sections, selected $\Delta$",ha="center",fontsize=14)
+fig.text(0.5, 0.96, r"$P_e$ x cross sections, selected $\Delta$",ha="center",fontsize=14)
 plt.savefig("Pe_x_cross_sections_delta.png", dpi=300, bbox_inches="tight")
 plt.show()
 
@@ -633,8 +633,7 @@ t_eval = np.linspace(t_span[0], t_span[1], 3000)
 fig, axes = plt.subplots(2, 2, figsize=(13, 9))
 axes = axes.flatten()
 
-colors = ["navy", "darkorange", "purple"]
-# colors = [("navy", "darkorange"), ("purple", "pink")] 
+colors = ["purple", "navy", "darkorange"]
 
 for i in range(len(Omega12_cases)):
     Omega12_0 = Omega12_cases[i]
@@ -737,9 +736,7 @@ for i in range(len(Omega12_cases)):
     avg_norm = np.mean(norm)
     error = np.max(np.abs(norm - 1))
 
-    # ---------------------------------- #
     # Plot
-    # ---------------------------------- #
     ax = axes[i]
 
     ax.plot(t_eval, P1, label=r"$|C_1|^2$", color=colors[0])
@@ -778,7 +775,330 @@ plt.savefig("Three_level_AE.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # ---------------------------------- #
-# 2.e. solving via Heff
+# 2.e. solving via H_eff 
 # ---------------------------------- #
 
-Omega_eff = Omega12_0 * Omega23_0 / Delta0
+# Since Omega12 = Omega23, the diagonal terms of H_eff are equal.
+# They contribute only a global phase and do not affect the populations.
+# So can be removed
+
+# def new schrodinger eq for H_eff (can't use schrodinger2 the H is different along main diag)
+def schrodinger_Heff(t, state, Delta_eff, Omega_eff):
+    C1, C3 = state
+
+    dC1_dt= -(1j/2) *((Delta_eff * C1) + (Omega_eff * C3))
+    dC3_dt= -(1j/2) *((Delta_eff * C3) + (Omega_eff.conjugate() * C1))
+    
+    return [dC1_dt, dC3_dt]
+
+# Def parameters
+Omega12_cases = [5.0, 5.0]
+Omega23_cases = [5.0, 5.0]
+Delta0_cases = [10 * Omega12_cases[0], 20 * Omega12_cases[1]]
+
+# Took only the initial state of c = (1, 0, 0) and not c = (0, 1, 0) => c = (0, 0) is weird 
+initial_state_cases = np.array([(1, 0), (1, 0)], dtype=complex)
+
+# Plot def
+fig, axes = plt.subplots(1, 2, figsize=(13, 9))
+axes = axes.flatten()
+
+Omega_eff1 = (Omega12_cases[1] * Omega23_cases[1]) / Delta0_cases[1]
+
+for i in range(len(Omega12_cases)):
+    Omega12_0 = Omega12_cases[i]
+    Omega23_0 = Omega23_cases[i]
+    Delta0 = Delta0_cases[i]
+
+    Omega_eff = (Omega12_0 * Omega23_0) / Delta0
+    Delta_eff = (Omega12_0**2) / Delta0
+
+    # Time - the same time scale for both iter
+    t_span = (0, (3 * pi/Omega_eff1))
+    t_eval = np.linspace(t_span[0], t_span[1], 3000)    
+
+    sol = solve_ivp(schrodinger_Heff, t_span, initial_state_cases[i], args=(Delta_eff, Omega_eff), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+
+    C1, C3 = sol.y[0], sol.y[1]
+    P1, P3 = np.abs(C1)**2, np.abs(C3)**2
+    norm = P1 + P3
+    avg_norm = np.mean(norm)
+    error = np.max(np.abs(norm - 1))
+
+    # Plot
+    ax = axes[i]
+
+    ax.plot(t_eval, P1, label=r"$|C_1|^2$", color=colors[0])
+    ax.plot(t_eval, P3, label=r"$|C_3|^2$", color=colors[2])
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Population")
+
+    ax.set_ylim(-0.05, 1.05)
+
+    ax.legend(loc="upper right")
+    ax.grid(alpha=0.3)
+
+    # initial state for title
+    c10, c30 = np.real(initial_state_cases[i])
+
+    ax.set_title(rf"$\Omega_{{12}}=\Omega_{{23}}={Omega12_0}$"
+        "\n"
+        rf"$\Delta={Delta0},\ \delta=0$"
+        "\n"
+        rf"$C(0)=({c10},{c30})$")
+
+    norm_text = (rf"$\langle P_1+P_3\rangle={avg_norm:.10f}$"
+        "\n"
+        rf"$\max|P_1+P_3-1|={error:.2e}$")
+
+    ax.text(0.5, -0.30, norm_text, transform=ax.transAxes, ha="center", va="top", fontsize=10)
+
+fig.suptitle(r"Three-level system dynamics"
+             "\n"
+             r"Adiabatic Elimination solution $H_{\mathrm{eff}}$", fontsize=18, y=0.99)
+
+plt.tight_layout(rect=[0, 0.06, 1, 0.95])
+plt.savefig("Three_level_AE_Heff.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+
+
+# ------------------------------------------------------------- #
+# 2.f. - 2.g. 3 level EIT (Electromagnetic Induced Tansparency)
+# ------------------------------------------------------------- #
+
+# This time Omega12 << Omega23
+# Case 1: Omega12 = 0.01 Omega23
+# Case 2: Omega12 = 0.1 Omega23
+# Initial cond c(0) = [(1, 0, 0), (0, 1, 0)]
+
+# Def all cases
+Omega23_cases = [5.0, 5.0, 5.0, 5.0]
+Omega12_cases = [0.01 * Omega23_cases[0], 0.01 * Omega23_cases[1], 0.1 * Omega23_cases[2], 0.1 * Omega23_cases[3]]
+Delta0_cases = delta0_cases = np.zeros(len(Omega23_cases))
+
+initial_state_cases = np.array([(1, 0, 0), (0, 1, 0), (1, 0, 0), (0, 1, 0)], dtype=complex)
+
+# -------------------------- #
+# Time dynamics at Delta = 0
+# -------------------------- #
+# Plot def
+fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+axes = axes.flatten()
+
+for i in range(len(Omega12_cases)):
+    Omega12_0 = Omega12_cases[i]
+    Omega23_0 = Omega23_cases[i]
+    Delta0 , delta0 = Delta0_cases[i], delta0_cases[i]
+
+     # Delta(t), delta(t), Omega12(t), Omega23(t) are all const
+    Omega12 = lambda t, Omega12_0=Omega12_0: Omega12_0
+    Omega23 = lambda t, Omega23_0=Omega23_0: Omega23_0
+    Delta = lambda t, Delta0=Delta0: Delta0
+    delta = lambda t, delta0=delta0: delta0
+
+    # Time 
+    t_span = (0, (3 * pi/Omega23_0))
+    t_eval = np.linspace(t_span[0], t_span[1], 3000)
+
+    sol = solve_ivp(schrodinger_3_level, t_span, initial_state_cases[i], args=(Delta, delta, Omega12, Omega23), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+
+    C1, C2, C3 = sol.y[0], sol.y[1], sol.y[2]
+    P1, P2, P3 = np.abs(C1)**2, np.abs(C2)**2, np.abs(C3)**2
+    norm = P1 + P2 + P3
+    avg_norm = np.mean(norm)
+    error = np.max(np.abs(norm - 1))
+
+    # Plot
+    ax = axes[i]
+
+    ax.plot(t_eval, P1, label=r"$|C_1|^2$", color=colors[0])
+    ax.plot(t_eval, P2, label=r"$|C_2|^2$", color=colors[1])
+    ax.plot(t_eval, P3, label=r"$|C_3|^2$", color=colors[2])
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Population")
+
+    ax.set_ylim(-0.05, 1.05)
+
+    ax.legend(loc="upper right")
+    ax.grid(alpha=0.3)
+
+    # initial state for title
+    c10, c20, c30 = np.real(initial_state_cases[i])
+    ratio = Omega12_0 / Omega23_0
+
+    ax.set_title(rf"$\Omega_{{12}}={ratio:.2f}\Omega_{{23}}$"
+        "\n"
+        rf"$\Omega_{{23}}={Omega23_0},\ \Delta=0,\ \delta=0$"
+        "\n"
+        rf"$C(0)=({c10:.0f},{c20:.0f},{c30:.0f})$")
+
+    norm_text = (rf"$\langle P_1+P_2+P_3\rangle={avg_norm:.10f}$"
+        "\n"
+        rf"$\max|P_1+P_2+P_3-1|={error:.2e}$")
+
+    ax.text(0.5, -0.30, norm_text, transform=ax.transAxes, ha="center", va="top", fontsize=10)
+
+fig.suptitle(r"Three-level EIT dynamics"
+             "\n"
+             r"Time evolution at $\Delta=0$", fontsize=18, y=0.99)
+
+plt.tight_layout(rect=[0, 0.06, 1, 0.95])
+plt.savefig("Three_level_EIT_time.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+# ------------------------------------------ #
+# Population as a function of detuning Delta
+# at fixed time tf = pi / Omega23
+# ------------------------------------------ #
+
+Delta_values = np.linspace(-5 * Omega23_cases[0], 5 * Omega23_cases[0], 1000)
+
+fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+axes = axes.flatten()
+
+for i in range(len(Omega12_cases)):
+    Omega12_0 = Omega12_cases[i]
+    Omega23_0 = Omega23_cases[i]
+
+    t_final = pi / Omega23_0
+    t_span = (0, t_final)
+
+    Omega12 = lambda t, Omega12_0=Omega12_0: Omega12_0
+    Omega23 = lambda t, Omega23_0=Omega23_0: Omega23_0
+    delta = lambda t, delta0=delta0: delta0
+
+    P2_vs_Delta = np.zeros(len(Delta_values))
+    P3_vs_Delta = np.zeros(len(Delta_values))
+
+    for j, Delta0 in enumerate(Delta_values):
+
+        Delta = lambda t, Delta0=Delta0: Delta0
+
+        # Only need the population at the final time t_eval=[t_final]
+        sol = solve_ivp(schrodinger_3_level, t_span, initial_state_cases[i], args=(Delta, delta, Omega12, Omega23), t_eval=[t_final], rtol=1e-9, atol=1e-11)
+
+        C2_final = sol.y[1, -1]
+        C3_final = sol.y[2, -1]
+
+        P2_vs_Delta[j] = np.abs(C2_final)**2
+        P3_vs_Delta[j] = np.abs(C3_final)**2
+
+    # Plot
+    ax = axes[i]
+
+    ax.plot(Delta_values, P2_vs_Delta, label=r"$|C_2(t_f)|^2$", color=colors[1])
+    ax.plot(Delta_values, P3_vs_Delta, label=r"$|C_3(t_f)|^2$", color=colors[2])
+    ax.set_xlabel(r"Detuning $\Delta$")
+    ax.set_ylabel("Population")
+
+    ax.set_ylim(-0.05, 1.05)
+    ax.grid(alpha=0.3)
+    ax.legend()
+
+    c10, c20, c30 = np.real(initial_state_cases[i])
+    ratio = Omega12_0 / Omega23_0
+
+    ax.set_title(rf"$\Omega_{{12}}={ratio:.2f}\Omega_{{23}}$"
+        "\n"
+        rf"$t_f=\pi/\Omega_{{23}},\ \delta=0$"
+        "\n"
+        rf"$C(0)=({c10:.0f},{c20:.0f},{c30:.0f})$")
+
+fig.suptitle("Three-level EIT"
+    "\n"
+    r"Upper-level populations as a function of detuning $\Delta$", fontsize=18, y=0.99)
+plt.tight_layout(rect=[0, 0, 1, 0.94])
+plt.savefig("Three_level_EIT_detuning.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+# ---------------------------- #
+# 2.h. 3 level STIRAP dynamics
+# ---------------------------- #
+
+# scaning Delta over -Delta_0 to +Delta_0
+# Delta(t) = -Delta0 + alpha*t
+# sweep from -Delta0 to +Delta0
+# delta = 0
+# initial state C(0) = (1,0,0)
+# alpha = [1.0, 5.0, 10.0]
+# plot C(t) slow adiabatic rate, and fast depending on alpha
+
+Omega23_0 = 5.0
+Omega12_0 = 0.1 * Omega23_0
+
+Delta0 = 10 * Omega23_0
+delta0 = 0.0
+
+initial_state_STIRAP = np.array([1.0, 0.0, 0.0], dtype=complex)
+
+# different sweeping rates:
+# small alpha = slow / more adiabatic
+# large alpha = fast / less adiabatic
+alpha_cases = [0.1, 1.0, 5.0, 20.0]
+
+fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+axes = axes.flatten()
+
+for i, alpha in enumerate(alpha_cases):
+
+    # Time range
+    t_final = 2 * Delta0 / alpha
+    t_span = (0, t_final)
+    t_eval = np.linspace(t_span[0], t_span[1], 3000)
+
+    # Def parameters
+    Omega12 = lambda t, Omega12_0=Omega12_0: Omega12_0
+    Omega23 = lambda t, Omega23_0=Omega23_0: Omega23_0
+    Delta = lambda t, Delta0=Delta0, alpha=alpha: -Delta0 + alpha * t
+    delta = lambda t, delta0=delta0: delta0
+
+    sol = solve_ivp(schrodinger_3_level, t_span, initial_state_STIRAP, args=(Delta, delta, Omega12, Omega23), t_eval=t_eval, rtol=1e-9, atol=1e-11)
+
+    C1, C2, C3 = sol.y[0], sol.y[1], sol.y[2]
+    P1 = np.abs(C1)**2
+    P2 = np.abs(C2)**2
+    P3 = np.abs(C3)**2
+
+    # normalization check
+    norm = P1 + P2 + P3
+    avg_norm = np.mean(norm)
+    error = np.max(np.abs(norm - 1))
+
+    # Plot
+    ax = axes[i]
+
+    ax.plot(t_eval, P1, label=r"$|C_1|^2$", color=colors[0])
+    ax.plot(t_eval, P2, label=r"$|C_2|^2$", color=colors[1])
+    ax.plot(t_eval, P3, label=r"$|C_3|^2$", color=colors[2])
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Population")
+
+    ax.set_ylim(-0.05, 1.05)
+
+    ax.grid(alpha=0.3)
+    ax.legend(loc="upper right")
+
+    ax.set_title(rf"$\alpha={alpha}$"
+        "\n"
+        rf"$\Omega_{{12}}={Omega12_0},\ "
+        rf"\Omega_{{23}}={Omega23_0}$"
+        "\n"
+        rf"$\Delta:-{Delta0}\rightarrow+{Delta0}$")
+
+    norm_text = (rf"$\langle P_1+P_2+P_3\rangle={avg_norm:.10f}$"
+        "\n"
+        rf"$\max|P_1+P_2+P_3-1|={error:.2e}$")
+
+    ax.text(0.5, -0.30, norm_text, transform=ax.transAxes, ha="center", va="top", fontsize=10)
+
+fig.suptitle("Three-level system dynamics"
+    "\n"
+    r"Linear detuning sweep: $\Delta(t)=-\Delta_0+\alpha t$", fontsize=18, y=0.99)
+
+plt.tight_layout(rect=[0, 0.06, 1, 0.95])
+plt.savefig("Three_level_STIRAP_dynamics.png", dpi=300, bbox_inches="tight")
+plt.show()
